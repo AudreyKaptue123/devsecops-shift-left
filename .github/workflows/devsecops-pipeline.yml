@@ -1,0 +1,69 @@
+name: DevSecOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build application
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t demo-app:${{ github.sha }} .
+
+  sast:
+    name: SAST - Analyse statique du code (Bandit)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bandit
+        run: pip install bandit
+      - name: Run Bandit
+        run: bandit -r app/ -f json -o bandit-report.json || true
+      - name: Upload SAST report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-report
+          path: bandit-report.json
+      - name: Fail on High severity
+        run: bandit -r app/ -ll
+
+  sca:
+    name: SCA - Analyse des dépendances (pip-audit)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Run pip-audit
+        run: pip-audit -r app/requirements.txt -f json -o sca-report.json || true
+      - name: Upload SCA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca-report
+          path: sca-report.json
+
+  iac-scan:
+    name: IaC - Analyse du Dockerfile (Hadolint)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+  gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    needs: [sast, sca, iac-scan]
+    steps:
+      - name: Evaluate quality gate
+        run: echo "Toutes les analyses de sécurité sont passées : promotion vers l'environnement suivant autorisée."

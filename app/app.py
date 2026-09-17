@@ -1,21 +1,26 @@
+import shlex
 import subprocess
-from flask import Flask, request, render_template_string
+from flask import Flask, request, escape
 
 app = Flask(__name__)
+
+ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 
 @app.route("/ping")
 def ping():
     host = request.args.get("host", "127.0.0.1")
-    # Vulnerable: shell=True with user input (OS command injection)
-    result = subprocess.run("ping -c 1 " + host, shell=True, capture_output=True)
+    # Fixed: strict allow-list validation, no shell=True, no string concatenation
+    if host not in ALLOWED_HOSTS:
+        return "Host not allowed", 400
+    result = subprocess.run(["/bin/ping", "-c", "1", host], capture_output=True)
     return result.stdout
 
 @app.route("/hello")
 def hello():
     name = request.args.get("name", "world")
-    # Vulnerable: unescaped template rendering (XSS / SSTI risk)
-    template = "Hello " + name + "!"
-    return render_template_string(template)
+    # Fixed: output is escaped, no template string built from user input (no SSTI)
+    return f"Hello {escape(name)}!"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", debug=True)
+    # Fixed: debug disabled, bound to loopback only
+    app.run(host="127.0.0.1", debug=False)

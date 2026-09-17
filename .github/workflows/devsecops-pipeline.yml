@@ -66,4 +66,4 @@ jobs:
     needs: [sast, sca, iac-scan]
     steps:
       - name: Evaluate quality gate
-        run: echo "Toutes les analyses de sécurité sont passées : promotion vers l'environnement suivant autorisée."
+        run: echo "Analyses terminees et validees."
